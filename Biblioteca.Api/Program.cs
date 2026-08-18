@@ -112,6 +112,32 @@ app.MapPut("/itens/{id:int}", (int id, AlteracaoItem requisicao) =>
     return Results.Ok(item);
 });
 
+app.MapDelete("/itens/{id:int}", (int id) =>
+{
+    var item = acervo.BuscarPorId(id);
+    if (item is null)
+    {
+        // 404 e nao 204: o cliente pediu para apagar algo que nunca existiu, e
+        // saber disso e util. DECISAO SUA — ha quem defenda 204 aqui, porque o
+        // efeito desejado ("esse item nao existe mais") ja vale de qualquer forma.
+        return Results.NotFound(new { erro = $"Item {id} não encontrado." });
+    }
+
+    // Item emprestado sobe ExcecaoDominio daqui e vira 409 no middleware.
+    acervo.Remover(item);
+
+    // 204 No Content: deu certo e nao ha o que devolver. Devolver o objeto
+    // apagado seria estranho — o corpo descreveria um recurso que a propria
+    // resposta acabou de dizer que nao existe mais.
+    return Results.NoContent();
+});
+
+// Andaime da Etapa 6: sem POST /emprestimos ainda, este e o unico jeito de ter
+// um item indisponivel para o DELETE recusar. Sai na Etapa 8.
+var dvdEmprestado = new Dvd("O Auto da Compadecida", "Guel Arraes", 12);
+acervo.Adicionar(dvdEmprestado);
+new Pessoa("Teste", DateTime.Today.AddYears(-30)).Emprestar(dvdEmprestado);
+
 
 // Temporario, so para provar o middleware. Sai quando o POST /itens entrar.
 app.MapGet("/estouro-teste", () => new Livro("", "Ninguem"));

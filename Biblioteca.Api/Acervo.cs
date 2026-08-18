@@ -27,4 +27,28 @@ public class Acervo
     {
         return _itens.FirstOrDefault(item => item.Id == id);
     }
+
+    // Primeira regra do sistema que NAO nasce no dominio, e vale reparar no porque:
+    // "nao remover item emprestado" precisa de duas coisas ao mesmo tempo — o estado
+    // do item e a colecao onde ele esta. ItemAcervo conhece o proprio estado e nao
+    // sabe que existe um acervo; nao ha onde escrever isso la dentro.
+    //
+    // ExcecaoDominio mesmo estando fora do Dominio: o middleware da Etapa 3 traduz
+    // esse tipo em 409, e a recusa aqui e da mesma natureza — pedido bem formado,
+    // estado que nao permite. Um tipo de excecao novo obrigaria um segundo catch
+    // para produzir exatamente a mesma resposta.
+    public void Remover(ItemAcervo item)
+    {
+        if (!item.Disponibilidade)
+        {
+            // ATENCAO: sem esta guarda o Emprestimo na lista da Pessoa continuaria
+            // em aberto apontando para um item fora do acervo. Ele seguiria contando
+            // para o limite de tres, e a devolucao ainda funcionaria — devolvendo
+            // ao acervo um item que nao esta mais nele. Nada disso lanca; so fica errado.
+            throw new ExcecaoDominio(
+                $"O item \"{item.Titulo}\" está emprestado e não pode ser removido.");
+        }
+        _itens.Remove(item);
+    }
+
 }
