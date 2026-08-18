@@ -23,3 +23,8 @@ public record NovaRevista(string? Titulo, string? Autor);
 // int e nao int?: se o cliente omitir, chega 0 — "sem restricao de idade",
 // que e o mesmo default de Livro e Revista.
 public record NovoDvd(string? Titulo, string? Autor, int IdadeMinima);
+
+// Um so para os tres tipos: o que se altera e o que ItemAcervo declara,
+// nao o que cada filha acrescenta. Nao ha AlteracaoDvd porque IdadeMinima
+// nao entra nesta etapa.
+public record AlteracaoItem(string? Titulo, string? Autor);

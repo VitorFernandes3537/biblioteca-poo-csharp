@@ -93,6 +93,25 @@ app.MapPost("/itens/dvds", (NovoDvd requisicao) =>
     return Results.Created($"/itens/{dvd.Id}", dvd);
 });
 
+app.MapPut("/itens/{id:int}", (int id, AlteracaoItem requisicao) =>
+{
+    var item = acervo.BuscarPorId(id);
+    if (item is null)
+    {
+        return Results.NotFound(new { erro = $"Item {id} não encontrado." });
+    }
+
+    // Titulo vazio sobe como ExcecaoDominio daqui e vira 409 no middleware —
+    // mesma regra, mesma mensagem e mesmo status do POST. Foi para isso que a
+    // validacao ficou dentro de AlterarDados em vez de virar um if neste bloco.
+    item.AlterarDados(requisicao.Titulo!, requisicao.Autor!);
+
+    // DECISAO SUA: 200 com o item alterado. 204 No Content tambem seria correto
+    // em HTTP e economizaria o corpo, mas obrigaria um GET logo depois para o
+    // cliente ver como o recurso ficou. Devolver o objeto encerra a conversa.
+    return Results.Ok(item);
+});
+
 
 // Temporario, so para provar o middleware. Sai quando o POST /itens entrar.
 app.MapGet("/estouro-teste", () => new Livro("", "Ninguem"));
