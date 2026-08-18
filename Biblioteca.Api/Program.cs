@@ -60,6 +60,38 @@ app.MapGet("/itens/{id:int}", (int id) =>
         : Results.Ok(item);
 });
 
+app.MapPost("/itens/livros", (NovoLivro requisicao) =>
+{
+    // O ! silencia o Nullable: o construtor de ItemAcervo e quem decide se
+    // titulo vazio passa, e ele ja recusa null e "" da mesma forma.
+    // A ExcecaoDominio sobe daqui direto para o middleware — sem try/catch
+    // no endpoint. E isso que a Etapa 3 comprou.
+    var livro = new Livro(requisicao.Titulo!, requisicao.Autor!);
+    acervo.Adicionar(livro);
+
+    // 201 + Location: quem criou precisa saber o endereco do que criou.
+    // 200 devolveria o objeto sem dizer onde ele mora, e o cliente teria
+    // de cavar o id do corpo para montar a URL sozinho.
+    // ATENCAO: o Location aponta para /itens/{id}, e nao para /itens/livros/{id}.
+    // A rota que cria e por tipo; o recurso criado e um item do acervo, e o
+    // GET dele e um so. Location aponta para onde o recurso ESTA, nao para
+    // onde ele nasceu.
+    return Results.Created($"/itens/{livro.Id}", livro);
+});
+
+app.MapPost("/itens/revistas", (NovaRevista requisicao) =>
+{
+    var revista = new Revista(requisicao.Titulo!, requisicao.Autor!);
+    acervo.Adicionar(revista);
+    return Results.Created($"/itens/{revista.Id}", revista);
+});
+
+app.MapPost("/itens/dvds", (NovoDvd requisicao) =>
+{
+    var dvd = new Dvd(requisicao.Titulo!, requisicao.Autor!, requisicao.IdadeMinima);
+    acervo.Adicionar(dvd);
+    return Results.Created($"/itens/{dvd.Id}", dvd);
+});
 
 
 // Temporario, so para provar o middleware. Sai quando o POST /itens entrar.
