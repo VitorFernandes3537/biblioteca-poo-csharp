@@ -16,11 +16,15 @@ public abstract class ItemAcervo
     public bool Disponibilidade { get; private set; } = true;
     public abstract int PrazoDevolucao { get; }
     public abstract decimal MultaDiaAtrasado { get; }
+    public virtual int IdadeMinima => 0;
+    public bool PermiteIdade(int idade)
+    {
+        return idade >= IdadeMinima;
+    }
     public decimal CalcularMulta(int diasAtrasados)
     {
         return diasAtrasados >= 0 ? diasAtrasados * MultaDiaAtrasado : 0;
     }
-
     public void MarcarComoDevolvido()
     {
         if (Disponibilidade)
