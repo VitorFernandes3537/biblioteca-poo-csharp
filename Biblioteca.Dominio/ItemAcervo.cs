@@ -2,12 +2,16 @@ namespace Biblioteca.Dominio;
 
 public abstract class ItemAcervo
 {
+    private static int _proximoId = 1;
+
+    public int Id { get; private set; }
     protected ItemAcervo(string titulo, string autor)
     {
         if (string.IsNullOrWhiteSpace(titulo))
         {
             throw new ExcecaoDominio("O titulo é obrigatório.");
         }
+        Id = _proximoId++;
         Titulo = titulo;
         Autor = autor;
     }

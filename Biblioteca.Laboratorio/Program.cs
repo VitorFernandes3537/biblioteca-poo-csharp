@@ -67,3 +67,13 @@ catch (ExcecaoDominio excecao)
 {
     Console.WriteLine($"Cena 5 - {excecao.Message}");
 }
+
+
+
+// Cena 6 - todo item agora nasce com um Id proprio, herdado de ItemAcervo.
+// Os numeros dependem da ordem de criacao acima, inclusive dos itens que
+// falharam ao ser emprestados — eles foram criados, entao gastaram Id.
+var primeiro = new Livro("O Cortico", "Aluisio Azevedo");
+var segundo = new Revista("Piaui", "Editora Alvinegra");
+Console.WriteLine($"Cena 6 - {primeiro.Titulo} e o Id {primeiro.Id}, " +
+                  $"{segundo.Titulo} e o Id {segundo.Id}");
