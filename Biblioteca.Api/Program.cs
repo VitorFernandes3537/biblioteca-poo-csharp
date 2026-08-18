@@ -3,8 +3,34 @@ using Biblioteca.Dominio;
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
-
 var acervo = new Acervo();
+
+// ATENCAO: esta linha PRECISA vir antes de qualquer app.Map... — o middleware
+// so enxerga o que roda dentro do await next(), e next() e tudo que foi
+// registrado DEPOIS dele. Registrado no fim do arquivo, ele compila, sobe,
+// e nao captura nada: o endpoint ja respondeu 500 antes do catch existir.
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    // So ExcecaoDominio. Um catch (Exception) generico transformaria
+    // NullReference e falha de banco em 409 tambem — e 409 diz "sua regra
+    // foi recusada", nao "eu quebrei". Bug da API deve continuar dando 500,
+    // alto e feio, para nao passar despercebido.
+    catch (ExcecaoDominio excecao)
+    {
+        // 409 Conflict: o pedido esta bem formado e foi entendido — o estado
+        // do dominio e que nao permite. 400 seria "voce escreveu errado";
+        // "item ja emprestado" e o oposto disso: escrito certo, recusado.
+        context.Response.StatusCode = StatusCodes.Status409Conflict;
+        await context.Response.WriteAsJsonAsync(new { erro = excecao.Message });
+    }
+});
+
+
+
 
 acervo.Adicionar(new Livro("Dom Casmurro", "Machado de Assis"));
 acervo.Adicionar(new Revista("Superinteressante", "Editora Abril"));
@@ -34,4 +60,8 @@ app.MapGet("/itens/{id:int}", (int id) =>
         : Results.Ok(item);
 });
 
+
+
+// Temporario, so para provar o middleware. Sai quando o POST /itens entrar.
+app.MapGet("/estouro-teste", () => new Livro("", "Ninguem"));
 app.Run();
