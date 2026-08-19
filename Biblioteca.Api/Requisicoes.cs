@@ -10,19 +10,16 @@ namespace Biblioteca.Api;
 // middleware da Etapa 3 traduzir em 409. Validar duas vezes significa duas
 // mensagens diferentes para a mesma regra, e a do dominio e a que manda.
 //
-// string? porque o cliente pode simplesmente nao mandar o campo. Anotar string
-// nao-anulavel seria mentira: o desserializador poe null ali de qualquer forma,
-// e o Nullable ligado avisaria no lugar errado.
-public record NovoLivro(string? Titulo, string? Autor);
+// Um record no lugar de tres. Isto so foi possivel depois que IdadeMinima virou
+// dado de ItemAcervo: antes, "idadeMinima" era campo que dois dos tres tipos
+// ignoravam, e um corpo com campo inutil era o argumento contra a rota unica.
+// Agora todo item tem classificacao, entao o campo vale para os tres.
+//
+// Tipo e string e nao enum: enum daria erro de desserializacao do framework —
+// um 400 com corpo do proprio ASP.NET, fora do padrao { "erro": "..." } do resto
+// da API. Com string, a recusa e nossa, com a nossa mensagem.
+public record NovoItem(string? Tipo, string? Titulo, string? Autor, int IdadeMinima);
 
-public record NovaRevista(string? Titulo, string? Autor);
-
-// idadeMinima so existe aqui. Era o custo da rota unica: um corpo com um campo
-// que dois dos tres tipos ignoram. Com rota por tipo, cada corpo tem so o que
-// aquele tipo usa.
-// int e nao int?: se o cliente omitir, chega 0 — "sem restricao de idade",
-// que e o mesmo default de Livro e Revista.
-public record NovoDvd(string? Titulo, string? Autor, int IdadeMinima);
 
 // Um so para os tres tipos: o que se altera e o que ItemAcervo declara,
 // nao o que cada filha acrescenta. Nao ha AlteracaoDvd porque IdadeMinima

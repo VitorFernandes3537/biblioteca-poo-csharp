@@ -56,37 +56,33 @@ app.MapGet("/itens/{id:int}", (int id) =>
         : Results.Ok(item);
 });
 
-app.MapPost("/itens/livros", (NovoLivro requisicao) =>
+app.MapPost("/itens", (NovoItem requisicao) =>
 {
-    // O ! silencia o Nullable: o construtor de ItemAcervo e quem decide se
-    // titulo vazio passa, e ele ja recusa null e "" da mesma forma.
-    // A ExcecaoDominio sobe daqui direto para o middleware — sem try/catch
-    // no endpoint. E isso que a Etapa 3 comprou.
-    var livro = new Livro(requisicao.Titulo!, requisicao.Autor!);
-    acervo.Adicionar(livro);
+    // O switch que a heranca cobra. Ele existe porque ItemAcervo e abstrata e o
+    // JSON nao carrega tipo: alguem precisa dizer qual classe instanciar, e essa
+    // informacao nao esta no dado. E o mesmo problema que ORM resolve com coluna
+    // discriminadora, e que o System.Text.Json resolveria com [JsonPolymorphic] —
+    // recusado porque poria atributo de serializacao dentro do Dominio.
+    //
+    // ToLowerInvariant e nao ToLower(): ToLower() usa a cultura do sistema, e em
+    // turco o "I" minusculo nao e "i". Comparacao de palavra-chave de protocolo
+    // nao pode depender do idioma da maquina onde a API roda.
+    ItemAcervo item = requisicao.Tipo?.ToLowerInvariant() switch
+    {
+        "livro" => new Livro(requisicao.Titulo!, requisicao.Autor!),
+        "revista" => new Revista(requisicao.Titulo!, requisicao.Autor!),
+        "dvd" => new Dvd(requisicao.Titulo!, requisicao.Autor!, requisicao.IdadeMinima),
 
-    // 201 + Location: quem criou precisa saber o endereco do que criou.
-    // 200 devolveria o objeto sem dizer onde ele mora, e o cliente teria
-    // de cavar o id do corpo para montar a URL sozinho.
-    // ATENCAO: o Location aponta para /itens/{id}, e nao para /itens/livros/{id}.
-    // A rota que cria e por tipo; o recurso criado e um item do acervo, e o
-    // GET dele e um so. Location aponta para onde o recurso ESTA, nao para
-    // onde ele nasceu.
-    return Results.Created($"/itens/{livro.Id}", livro);
-});
+        // ATENCAO: o descarte _ cobre null, "" e "revistta" — os tres casos em que
+        // nao da para saber o que criar. Sem este braco o switch lancaria
+        // SwitchExpressionException, que nao e ExcecaoDominio: escaparia do
+        // middleware e viraria 500.
+        _ => throw new ExcecaoDominio(
+            $"Tipo \"{requisicao.Tipo}\" não existe. Use livro, revista ou dvd.")
+    };
 
-app.MapPost("/itens/revistas", (NovaRevista requisicao) =>
-{
-    var revista = new Revista(requisicao.Titulo!, requisicao.Autor!);
-    acervo.Adicionar(revista);
-    return Results.Created($"/itens/{revista.Id}", revista);
-});
-
-app.MapPost("/itens/dvds", (NovoDvd requisicao) =>
-{
-    var dvd = new Dvd(requisicao.Titulo!, requisicao.Autor!, requisicao.IdadeMinima);
-    acervo.Adicionar(dvd);
-    return Results.Created($"/itens/{dvd.Id}", dvd);
+    acervo.Adicionar(item);
+    return Results.Created($"/itens/{item.Id}", item);
 });
 
 app.MapPut("/itens/{id:int}", (int id, AlteracaoItem requisicao) =>
@@ -177,7 +173,7 @@ app.MapPost("/emprestimos", (MovimentacaoEmprestimo requisicao) =>
     // e nao existe GET /emprestimos/{id} — emprestimo nao tem Id proprio, ele se
     // identifica pelo par pessoa+item. Location apontando para /pessoas/{id}
     // seria mentira: aquela URL devolve a pessoa, nao este emprestimo.
-    return Results.Created(string.Empty, EmprestimoResposta.De(emprestimo));
+    return Results.Created(string.Empty, EmprestimoResposta.De(emprestimo, pessoa));
 });
 
 app.MapPost("/devolucoes", (MovimentacaoEmprestimo requisicao) =>
@@ -211,7 +207,7 @@ app.MapPost("/devolucoes", (MovimentacaoEmprestimo requisicao) =>
 
     // 200 e nao 201: a devolucao nao criou recurso nenhum, alterou um existente.
     // E devolver o corpo importa aqui — e nele que sai a multa apurada.
-    return Results.Ok(EmprestimoResposta.De(emprestimo));
+    return Results.Ok(EmprestimoResposta.De(emprestimo, pessoa));
 });
 
 

@@ -33,10 +33,14 @@ public record PessoaResposta(
         pessoa.QtdEmprestimosEmAberto);
 }
 
-// Emprestimo tem o mesmo ciclo de Pessoa — Emprestimo.Pessoa.Emprestimos —
-// entao vale a mesma solucao. Pessoa e Item entram como Id e nome/titulo, e nao
-// como objetos aninhados: a resposta diz QUEM e O QUE, sem arrastar o grafo inteiro.
-// Quem quiser a pessoa completa tem /pessoas/{id}, que ja existe.
+// Continua existindo, e por um motivo diferente do de antes. Antes ela cortava um
+// ciclo; agora ela COMPOE: o emprestimo tem os Ids, o nome vem da pessoa, o titulo
+// vem do item. Isto e trabalho normal de camada de fronteira — juntar dados de
+// fontes diferentes para formar a resposta que o cliente precisa.
+//
+// Repare no que o De() passou a exigir: a pessoa por fora. O emprestimo sozinho
+// nao sabe mais o nome — e nao deve saber. Quem monta a resposta e que sabe onde
+// buscar. Esse e o custo da direcao imposta, e ele e explicito, nao escondido.
 public record EmprestimoResposta(
     int PessoaId,
     string PessoaNome,
@@ -49,9 +53,9 @@ public record EmprestimoResposta(
     int QtdDiasAtrasados,
     decimal MultaAtual)
 {
-    public static EmprestimoResposta De(Emprestimo emprestimo) => new(
-        emprestimo.Pessoa.Id,
-        emprestimo.Pessoa.Nome,
+    public static EmprestimoResposta De(Emprestimo emprestimo, Pessoa pessoa) => new(
+        emprestimo.PessoaId,
+        pessoa.Nome,
         emprestimo.Item.Id,
         emprestimo.Item.Titulo,
         emprestimo.DataEmprestimo,
@@ -61,3 +65,4 @@ public record EmprestimoResposta(
         emprestimo.QtdDiasAtrasados,
         emprestimo.MultaAtual);
 }
+

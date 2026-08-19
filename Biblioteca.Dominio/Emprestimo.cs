@@ -2,7 +2,7 @@ namespace Biblioteca.Dominio;
 
 public class Emprestimo
 {
-    public Pessoa Pessoa { get; }
+    public int PessoaId { get; }
     public ItemAcervo Item { get; }
     public DateTime DataEmprestimo { get; private set; } = DateTime.Today;
     public DateTime PrazoLimite { get; }
@@ -10,7 +10,7 @@ public class Emprestimo
     public Emprestimo(Pessoa pessoa, ItemAcervo item)
     {
         item.MarcarComoEmprestado();
-        Pessoa = pessoa;
+        PessoaId = pessoa.Id;
         Item = item;
         PrazoLimite = DataEmprestimo.AddDays(item.PrazoDevolucao);
     }
