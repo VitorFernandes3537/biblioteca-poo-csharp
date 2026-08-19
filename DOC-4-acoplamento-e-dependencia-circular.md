@@ -4,9 +4,10 @@ Material didático de assunto único, escrito a partir de um problema **que exis
 repositório**. Não é exemplo inventado: o ciclo descrito aqui foi construído, custou um arquivo
 inteiro, e foi corrigido depois.
 
-> **Estado deste documento:** descreve o problema **e a correção decidida**. Se você estiver lendo
-> antes de a correção ser aplicada, `Emprestimo` ainda tem a propriedade `Pessoa`. A seção
-> "A correção" descreve o alvo.
+> **Estado:** a correção **foi aplicada** no commit `c1aeb59`. O código atual tem
+> `Emprestimo.PessoaId`. O que este documento chama de "antes" é o que existiu até então, e está
+> preservado no histórico do git — `git show 978e9df:Biblioteca.Dominio/Emprestimo.cs` mostra a
+> versão com o ciclo, útil para comparar em aula.
 
 Referências completas ao fim. **Leia a ressalva sobre as fontes antes de citar em aula.**
 
@@ -261,6 +262,24 @@ O custo é real e vale nomear: **a resposta da API passa a precisar de duas font
 empréstimo dá os Ids, o cadastro dá o nome, o acervo dá o título. `EmprestimoResposta` continua
 existindo, agora compondo dados de lugares diferentes. Isso não é defeito: é o trabalho normal de
 uma camada de fronteira, e é o que ela existe para fazer.
+
+Na prática, o método de fábrica mudou de assinatura:
+
+```csharp
+EmprestimoResposta.De(emprestimo)           // antes: o empréstimo sabia tudo
+EmprestimoResposta.De(emprestimo, pessoa)   // depois: a fronteira compõe
+```
+
+E o `GET /emprestimos`, escrito depois, precisa carregar a pessoa junto ao achatar a lista:
+
+```csharp
+cadastro.Pessoas.SelectMany(pessoa =>
+    pessoa.Emprestimos.Select(emprestimo => new { emprestimo, pessoa }))
+```
+
+**Este é o custo visível da direção imposta**, e ele é preferível ao anterior: antes o empréstimo
+sabia o nome sozinho, ao preço de um ciclo no domínio, um erro 500 latente e um arquivo inteiro
+de projeções construído para contorná-lo.
 
 ---
 

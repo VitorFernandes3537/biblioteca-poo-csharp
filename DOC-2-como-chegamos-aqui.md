@@ -4,8 +4,12 @@ Registro cronológico da construção. O `DOC-1-o-que-existe.md` descreve o **re
 este descreve o **caminho** — inclusive os tropeços, que são a parte que não aparece no
 código pronto e é justamente a que a turma vai viver.
 
-Cobre da reestruturação em solução até a API completa: commits `f5f1303` a `978e9df`,
+Cobre da reestruturação em solução até a API revisada: commits `f5f1303` a `b39f2cd`,
 todos na branch `reestruturacao`, em 18–19/08/2026.
+
+São três fases: a **Fase 1** transforma um projeto de console em solução; a **Fase 2** constrói a
+API endpoint por endpoint; a **Fase 3** revisa o resultado e corrige quatro problemas que só
+apareceram quando a API pronta foi lida como um todo.
 
 ---
 
@@ -387,6 +391,216 @@ mais."` A regra nasceu em `Pessoa.Emprestar`, atravessou o middleware e virou re
 
 ---
 
+---
+
+# FASE 3 — a revisão
+
+Depois da etapa 8, a API foi lida inteira e quatro problemas apareceram. Nenhum foi encontrado
+por teste ou por erro em tela: **todos vieram de perguntas feitas sobre o desenho pronto.**
+
+As perguntas, na ordem em que foram feitas:
+
+1. *"Por que não tem `GET /emprestimos`?"*
+2. *"Por que dois arquivos, `Requisicoes.cs` e `Resposta.cs`?"*
+3. *"Como eu tenho uma dependência circular entre pessoa e empréstimo, e por quê?"*
+4. *"Para que servem `/itens/livros`, `/itens/revistas` e `/itens/dvds`? Não é só pegar itens?"*
+
+Vale registrar o método: as quatro são perguntas de quem **lê a API como usuário**, não de quem
+a escreveu. Três delas encontraram defeito real.
+
+### Mudança 0 — `IdadeMinima` era dado disfarçado de comportamento
+
+**Como apareceu:** da observação de que `Dvd` tinha uma assinatura de construtor diferente das
+outras duas — e a proposta de mover `idadeMinima` para a base, como parâmetro opcional.
+
+**O que estava errado.** No desenho anterior:
+
+```csharp
+public class Dvd(string titulo, string autor, int idadeMinima) : ItemAcervo(titulo, autor)
+{
+    public override int IdadeMinima => idadeMinima;   // <- parâmetro capturado
+}
+```
+
+Aquele `idadeMinima` era **parâmetro do construtor primário capturado pela propriedade**, não
+campo declarado. O compilador gera um campo escondido, sem nome, ao qual nada tem acesso — nem o
+próprio `Dvd`. Era por isso que o `PUT` não conseguia alterar a classificação de um DVD: não
+havia o que atribuir. Isso estava listado como limitação permanente no `DOC-1`, e não era: era
+consequência dessa forma de escrever.
+
+**A distinção que a mudança formaliza:**
+
+| propriedade | natureza | forma |
+|---|---|---|
+| `PrazoDevolucao` | regra do **tipo** — todo `Livro` tem 14 dias, sempre | `abstract`, cada filha declara |
+| `MultaDiaAtrasado` | regra do **tipo** | `abstract` |
+| `IdadeMinima` | dado da **instância** — dois DVDs diferem | propriedade com campo |
+
+`IdadeMinima` estava disfarçada de comportamento porque só um tipo a usava. O argumento que
+decidiu: **se todo item tem `PermiteIdade`, então todo item já tem o dado** — só um deles tinha
+onde guardá-lo.
+
+**As três formas consideradas:**
+
+| | forma | custo |
+|---|---|---|
+| A | parâmetro opcional na base (`int idadeMinima = 0`) | `new Dvd("x","y")` compilaria e criaria DVD livre |
+| B | obrigatório na base, cada filha passa explicitamente | verboso, três lugares para mudar o default |
+| **híbrido** ✅ | base opcional, `Dvd` exige na própria assinatura | — |
+
+**Escolhido: o híbrido.** A base aceita omitir porque para livro e revista "livre" é o normal;
+`Dvd` declara `Dvd(titulo, autor, idadeMinima)` sem default, porque criar DVD sem classificação
+é quase sempre esquecimento. **O tipo que mais precisa do dado é quem o exige.**
+
+Ganhos colaterais: uma guarda nova (`idadeMinima < 0` agora lança) e o método
+`AlterarClassificacao`, que destrava a alteração antes impossível.
+
+### Mudança 3 — uma rota de criação, não três
+
+**Como apareceu:** da constatação de que `/itens/livros` **mente**. A URL parece uma coleção
+filtrada — "todos os livros" — e só aceita POST. Não existe `GET /itens/livros`.
+
+**O que a mudança 0 destravou.** Na etapa 4, a rota única foi recusada com este argumento:
+*"`idadeMinima` ficaria no corpo de todos os tipos, ignorado em dois"*. Esse argumento **morreu**
+quando `IdadeMinima` passou a valer para todos. Três records viraram um:
+
+```csharp
+public record NovoItem(string? Tipo, string? Titulo, string? Autor, int IdadeMinima);
+```
+
+**O `switch` que sobrou, e por que ele é inevitável.** `ItemAcervo` é abstrata e o JSON não
+carrega tipo. Alguém precisa dizer qual classe instanciar, e **essa informação não está no
+dado**. É desserialização polimórfica — o mesmo problema que ORMs resolvem com coluna
+discriminadora.
+
+As saídas possíveis, e são só estas:
+
+| onde o tipo é dito | forma |
+|---|---|
+| na rota | três endpoints (o desenho anterior) |
+| no corpo | `switch` (o desenho atual) |
+| no serializador | `[JsonPolymorphic]` + `[JsonDerivedType]` |
+
+**`[JsonPolymorphic]` foi recusado** pelo mesmo motivo que `[JsonIgnore]` na etapa 7: são
+atributos de serialização, e eles ficariam **dentro de `Biblioteca.Dominio`**. Aceitar aqui
+depois de ter recusado lá seria incoerente. E há o argumento didático: o `switch` gerado pelo
+serializador continua existindo — só que invisível. Para quem aprende, ver as três linhas é
+melhor que ler um atributo que faz mágica.
+
+**A alternativa de fundo, também recusada:** eliminar a herança. `ItemAcervo` deixaria de ser
+abstrata e ganharia um campo `Tipo` (enum), com prazo e multa vindo de uma tabela. Um construtor
+só, nenhuma decisão de tipo em lugar nenhum. **Custo: apaga o assunto da aula** — herança,
+classe abstrata, `override` e polimorfismo são o motivo de o domínio existir.
+
+> **A lição:** herança modela bem enquanto o objeto vive em memória — `item.PrazoDevolucao`
+> funciona sem ninguém perguntar o tipo. Ela cobra o preço **na fronteira**, no instante em que
+> o objeto vira JSON, texto ou linha de banco.
+
+### Mudança 1 — quebrar a dependência circular
+
+**Como apareceu:** da desconfiança de que `Pessoa.Emprestar` fazendo `new Emprestimo(...)` fosse
+acoplamento indevido, e de que a referência circular fosse "erro gravíssimo".
+
+**O que a literatura confirmou e o que contradisse** (fontes completas no `DOC-4`):
+
+| hipótese | veredito |
+|---|---|
+| `Pessoa.Emprestar()` está no lugar errado | **contradita** — é *Factory Method on Aggregate Root* (Vernon, cap. 11), e Information Expert (Larman/GRASP) explica por quê |
+| `new Emprestimo` dentro dela é acoplamento indevido | **contradita** — é a mecânica do padrão |
+| A bidirecionalidade é defeito | **procede** — Evans manda impor direção; Fowler tem refactoring com nome |
+| É "erro gravíssimo" / viola ADP | **não confirmado** — ADP é sobre pacotes, não classes |
+
+**A correção:** `Emprestimo.Pessoa` → `Emprestimo.PessoaId`. O construtor continua recebendo a
+`Pessoa` (para que só `Emprestar` possa criar) mas guarda o `Id`.
+
+**O que a análise revelou:** um lado da associação carregava regra (`Pessoa → Emprestimo`
+sustenta o limite de três); o outro carregava conveniência (`Emprestimo → Pessoa` servia à
+projeção). E o segundo tinha custado um arquivo inteiro — `Resposta.cs` nasceu para cortar esse
+ciclo.
+
+**Consequência na API:** `EmprestimoResposta.De` passou a receber dois argumentos. A projeção
+deixou de **cortar** e passou a **compor**.
+
+O tratamento inteiro deste caso está em `DOC-4-acoplamento-e-dependencia-circular.md`.
+
+### Mudança 2 — as listagens que faltavam
+
+**Como apareceu:** da pergunta direta — não havia como ver o histórico de empréstimos.
+
+Não foi decisão: a etapa 8 implementou `POST /emprestimos` e `POST /devolucoes` porque a tabela
+de planejamento dizia isso, e **ninguém perguntou como se lê o que foi gravado**. Em `/itens` e
+`/pessoas` o GET veio antes do POST; em empréstimos, só a escrita foi escrita.
+
+Duas rotas entraram:
+
+- `GET /emprestimos` com `?emAberto=` opcional — o histórico completo;
+- `GET /pessoas/{id}/emprestimos` — o histórico de uma pessoa.
+
+**O que a implementação expôs:** empréstimos **não têm coleção própria**. Cada um vive dentro da
+`List<Emprestimo>` de uma pessoa, então a listagem geral precisa de `SelectMany` sobre o cadastro
+para achatar. A rota aninhada não precisa de nada disso — a pessoa já é dona da lista.
+
+É o agregado aparecendo na estrutura: pedir "os empréstimos da Marina" é natural; pedir "todos"
+exige varredura. Se um dia houver consulta pesada por empréstimo — por período, por atraso, por
+multa em aberto — esse `SelectMany` vira o gargalo, e a saída seria dar a empréstimo uma coleção
+própria.
+
+**Uma decisão de status:** `/pessoas/99/emprestimos` com pessoa inexistente responde **404**, não
+lista vazia. Não é "essa pessoa não tem empréstimos" — é "essa pessoa não existe". Já pessoa que
+existe e nunca pegou nada responde `200` com `[]`.
+
+### Os commits da revisão
+
+```
+b39f2cd feat: listagem de emprestimos com filtro por situacao e rota aninhada por pessoa
+c1aeb59 refactor: emprestimo guarda PessoaId no lugar da referencia, quebrando a dependencia circular
+```
+
+As mudanças 0 e 3 (idade mínima na base + rota única de criação) andaram juntas, por
+dependerem uma da outra — a rota única só ficou possível depois de o campo migrar para
+`ItemAcervo`.
+
+### O tropeço desta fase
+
+> **`System.TypeLoadException: Could not load type 'Invalid_Token.0x02000040'`**
+>
+> Apareceu depois da mudança 3, num POST, e **repetir não adiantava**. O stack trace apontava
+> para `HandleRequestBodyAndCompileRequestDelegateForJson` — o runtime não conseguia carregar o
+> tipo do parâmetro de um endpoint.
+>
+> **Causa:** o assembly em execução ficou inconsistente. Os records de entrada tinham sido
+> trocados (`NovoLivro`/`NovaRevista`/`NovoDvd` → `NovoItem`), e o binário em memória ainda
+> referenciava tipos que não existiam mais — hot reload aplicando patch sobre metadados
+> incompatíveis.
+>
+> **Não é erro de código.** Nenhuma leitura do `.cs` encontraria: o fonte estava correto.
+>
+> **Solução:**
+> ```powershell
+> dotnet clean
+> Remove-Item Biblioteca.Api\bin, Biblioteca.Api\obj, Biblioteca.Dominio\bin, Biblioteca.Dominio\obj -Recurse -Force
+> dotnet build
+> dotnet run --project Biblioteca.Api --no-hot-reload
+> ```
+>
+> **Como reconhecer:** `TypeLoadException` com `Invalid_Token` **sempre** aponta para binário
+> corrompido, nunca para erro de sintaxe ou lógica. Se o erro persiste idêntico após várias
+> tentativas e o código parece certo, suspeite do build antes de reler o fonte.
+
+### Um segundo tropeço, de leitura
+
+Vários testes desta fase produziram saídas confusas — `Item 1 não encontrado`, empréstimo saindo
+com título que não batia com o item recém-criado — **porque a API não tinha sido reiniciada**.
+
+Os contadores `_proximoId` são `static` por processo. Repetindo a sequência de teste sem
+reiniciar, a segunda rodada cria itens com Ids 8, 9, 10… enquanto o script continua pedindo
+`itemId: 1` — que aponta para algo criado dez minutos antes.
+
+**Regra:** ao repetir uma sequência de teste do zero, reinicie a API primeiro. Se a saída não
+fizer sentido, verifique os Ids antes de suspeitar do código.
+
+---
+
 ## Onde a construção parou, e por quê
 
 Três etapas estavam planejadas e **não foram feitas**:
@@ -403,6 +617,11 @@ segunda implementação concreta para trocar. Sem essa necessidade, viram cerim�
 
 A decisão foi consolidar o entendimento do que existe em vez de acrescentar abstração que não
 seria absorvida.
+
+Uma quinta mudança foi considerada na Fase 3 e **descartada**: filtros por query string em
+`GET /itens` (`?tipo=`, `?disponivel=`, `?autor=`). Ela traria um problema junto — filtrar por
+tipo exigiria que o tipo aparecesse na resposta, o que hoje não acontece. Ficou de fora por
+decisão de escopo, não por dificuldade.
 
 ---
 
@@ -441,10 +660,12 @@ Todos aconteceram de verdade durante esta construção.
 | `415 Unsupported Media Type` | faltou `-H "Content-Type: application/json"` | — |
 | JSON chega malformado no POST | faltou `--%` no `curl.exe` do PowerShell | — |
 | `Item N não encontrado` depois de reiniciar | acervo em memória: reiniciou, zerou | os Ids voltam a contar do 1 |
+| `TypeLoadException: Invalid_Token` | **binário corrompido**, não erro de código | repetir não adianta; `dotnet clean` + apagar `bin`/`obj` |
+| Saída com Ids altos e itens "errados" | API não reiniciada entre rodadas de teste | contadores `static` continuam de onde pararam |
 
 ---
 
-## As quatro decisões que mais mandaram no resultado
+## As seis decisões que mais mandaram no resultado
 
 1. **`Id` no domínio, e não no armazenamento** (etapa 0) — permitiu que o JSON saísse direto e
    adiou a conversa sobre projeção até ela ter motivo concreto.
@@ -454,3 +675,22 @@ Todos aconteceram de verdade durante esta construção.
    domínio declarou. `Id` e `Disponibilidade` continuam inalcançáveis de fora.
 4. **Projeção, e não `IgnoreCycles`** (etapa 7) — o que sai na resposta virou escolha explícita
    da API, não resíduo do formato interno dos objetos.
+5. **`IdadeMinima` como dado, e não como `virtual`** (mudança 0) — separou regra do tipo de dado
+   da instância, e destravou a rota única de criação.
+6. **`PessoaId`, e não `Pessoa`** (mudança 1) — desfez a única dependência circular do domínio,
+   trocando conveniência de apresentação por composição na fronteira.
+
+## O que a Fase 3 ensina sobre método
+
+Três dos quatro problemas corrigidos **não tinham sintoma**. A API respondia certo, os testes
+passavam, nada em tela apontava para eles:
+
+- a rota `/itens/livros` mentia no nome, e funcionava;
+- o ciclo entre `Pessoa` e `Emprestimo` estava neutralizado pelas projeções, e não aparecia;
+- `IdadeMinima` como `virtual` compilava e respondia certo.
+
+Só `GET /emprestimos` era ausência visível — e mesmo essa passou despercebida por uma fase
+inteira, porque a tabela de planejamento não a listava.
+
+> **O que os encontrou:** ler a API pronta e perguntar *"por que isto é assim?"* sobre cada peça.
+> Nenhum deles apareceria em teste, porque teste verifica o que você pensou em verificar.

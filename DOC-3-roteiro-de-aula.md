@@ -35,10 +35,13 @@ e retomar depois.
 | **1** | da classe ao projeto | monta a solução de três projetos e entende a direção da referência |
 | **2** | primeiro endpoint | serve dados por HTTP e distingue 404 de lista vazia |
 | **3** | erro vira resposta | middleware, 409, e por que a ordem do pipeline importa |
-| **4** | escrita | POST e o problema dos construtores diferentes |
+| **4** | escrita | POST e o preço da herança na fronteira |
 | **5** | o agregado | empréstimo/devolução, e a armadilha do construtor |
+| **6** | revisão | ler o que ficou pronto e achar o que não tem sintoma |
 
 Blocos 1 e 2 são os mais mecânicos. O 3 é o mais conceitual. O 5 é o que dá sentido a todos.
+O **6 é opcional e o mais avançado** — só faz sentido se houver tempo e se a turma já estiver
+confortável com os cinco primeiros.
 
 ---
 
@@ -258,12 +261,39 @@ saberia escolher entre `Livro`, `Revista` e `Dvd`.
 
 É aqui que a pergunta guardada do bloco 2 volta: **o tipo não sai no JSON, e agora ele faz falta.**
 
-### As duas saídas
+### As três saídas — e por que só existem três
 
-Mostre a tabela do `DOC-2`, etapa 4: campo `tipo` no corpo × rota por tipo.
+O tipo tem que ser dito em algum lugar. Só há três lugares possíveis:
 
-O argumento decisivo: com rota por tipo, `"revistta"` digitado errado vira **404 do roteador**,
-antes de qualquer código seu rodar. Com campo `tipo`, vira um `switch` que falha em runtime.
+| onde | forma | o que acontece com `"revistta"` |
+|---|---|---|
+| na **rota** | `POST /itens/livros`, `/revistas`, `/dvds` | 404 do roteador, antes do seu código |
+| no **corpo** | `POST /itens` com campo `tipo` + `switch` | 409 do seu `switch` |
+| no **serializador** | `[JsonPolymorphic]` + `[JsonDerivedType]` | erro do framework |
+
+**A implementação atual usa o corpo.** Vale mostrar as três e explicar a recusa das outras:
+
+- **Rota por tipo** foi o desenho original, e foi trocado porque `/itens/livros` **mente**: a URL
+  parece uma coleção filtrada ("todos os livros") e só aceita POST. Não existe
+  `GET /itens/livros`.
+- **`[JsonPolymorphic]`** resolveria sozinho, sem `switch`. Recusado porque são **atributos de
+  serialização dentro do domínio** — `Biblioteca.Dominio` não pode saber que JSON existe. E o
+  `switch` continuaria existindo, só que gerado e invisível.
+
+> **A pergunta que fecha o assunto:** *"por que isso é um problema? Onde está a informação que
+> falta?"*
+>
+> Resposta: no dado. `{"titulo":"x","autor":"y"}` não diz se é livro ou revista, e o
+> desserializador precisa instanciar uma classe **concreta**. É desserialização polimórfica — o
+> mesmo problema que ORM resolve com coluna discriminadora.
+
+**A lição maior:** herança modela bem enquanto o objeto vive **em memória** —
+`item.PrazoDevolucao` funciona sem ninguém perguntar o tipo. Ela cobra o preço **na fronteira**:
+quando o objeto vira JSON, texto, ou linha de banco.
+
+Se a turma perguntar "então herança foi má escolha?" — a resposta honesta é que a alternativa
+(um campo `Tipo` enum, sem subclasses) resolveria o endpoint e **apagaria o assunto da aula**.
+É um trade-off, não um erro.
 
 ### Records de requisição — o conceito novo
 
@@ -411,26 +441,117 @@ cliente                   { "erro": "Marina tem 15 anos e o item ... é para 16 
 
 ---
 
+# BLOCO 6 — revisão: achar o que não tem sintoma
+
+**Objetivo:** o mais avançado. Teste verifica o que você pensou em verificar; revisão encontra o
+que você não pensou.
+
+Este bloco reproduz a **Fase 3** do `DOC-2` — quatro problemas encontrados numa API que já
+funcionava. Três deles **não tinham sintoma nenhum**.
+
+### Abertura — a provocação
+
+Mostre a API completa rodando. Todos os endpoints respondendo. Então:
+
+> "Está pronto. Funciona. Agora me digam o que está errado."
+
+Silêncio é a reação esperada. Aí dê o método:
+
+> "Não olhem o código procurando bug. Leiam as URLs e os nomes como se vocês fossem o cliente
+> desta API, e perguntem **'por que isto é assim?'** em cada peça."
+
+### Os quatro achados — deixe-os encontrar, um por vez
+
+Se travarem, as pistas estão em ordem crescente de entrega.
+
+**1. `POST /itens/livros`** *(no desenho original)*
+> Pista: "digitem essa URL no navegador. O que vocês esperam ver?"
+
+Uma URL que parece coleção e só aceita POST. **O nome mente.**
+
+**2. Não existe `GET /emprestimos`**
+> Pista: "a Marina pegou um livro há três semanas. Como eu vejo isso?"
+
+Não vê. O dado está em memória e é inalcançável por HTTP. Ninguém percebeu porque a lista de
+planejamento dizia "POST /emprestimos e POST /devolucoes", e foi implementado literalmente.
+
+**3. `IdadeMinima` era `virtual`**
+> Pista: "por que `Dvd` tem construtor diferente dos outros dois?"
+
+`PrazoDevolucao` é regra do tipo (todo `Livro` tem 14 dias). `IdadeMinima` é dado da instância
+(dois DVDs diferem). Estava disfarçada de comportamento porque só um tipo a usava — e por isso
+a classificação de um DVD não podia ser alterada: o valor vivia num campo gerado pelo compilador,
+sem nome, inalcançável.
+
+**4. A dependência circular**
+> Pista: "abram `Pessoa` e `Emprestimo` lado a lado. O que cada uma guarda da outra?"
+
+Este é o mais rico, e tem documento próprio: **`DOC-4-acoplamento-e-dependencia-circular.md`**.
+
+### O bloco 4 merece uma aula inteira
+
+Se houver tempo, este é o assunto mais valioso do material — e o mais fácil de ensinar errado.
+
+A armadilha didática: a turma vê `new Emprestimo(...)` dentro de `Pessoa.Emprestar` e conclui
+que **instanciar dentro de outra classe é errado**. Isso é falso, e a literatura diz o contrário
+(*Factory Method on Aggregate Root*, Vernon; *Information Expert*, Larman/GRASP).
+
+**A pergunta que separa as duas coisas:**
+
+> "Qual regra de negócio deixa de existir se eu apagar `Pessoa._emprestimos`? E se eu apagar
+> `Emprestimo.Pessoa`?"
+
+| referência | resposta |
+|---|---|
+| `Pessoa` → `Emprestimo` | o **limite de três** some |
+| `Emprestimo` → `Pessoa` | **nada** some |
+
+> **Acoplamento não é erro. Acoplamento sem regra é.**
+
+O `DOC-4` traz o caso inteiro: as fontes (Evans, Vernon, Fowler, Larman, Martin), o que a
+literatura confirma e o que contradiz, o preço concreto que o ciclo cobrou neste repositório, e
+seis perguntas prontas para a turma.
+
+⚠ **Leia a ressalva sobre fontes do `DOC-4` antes de citar em aula** — as passagens de Evans e
+Vernon vieram de fontes secundárias.
+
+### Fechamento
+
+> "Três destes quatro problemas não tinham sintoma. A API respondia certo. Nenhum teste pegaria,
+> porque teste verifica o que vocês pensaram em verificar. O que os encontrou foi ler o que
+> estava pronto e perguntar por quê."
+
+---
+
 ## Exercícios — em ordem de dificuldade
 
 **Mecânicos** (fixam sintaxe e o ciclo requisição-resposta)
-1. `GET /itens/disponiveis` — só os com `Disponibilidade == true`.
-2. `GET /pessoas/{id}/emprestimos` — usando `EmprestimoResposta`.
-3. `GET /itens/{id}` devolvendo também o tipo (`"livro"`, `"revista"`, `"dvd"`).
+1. `GET /itens?disponivel=true` — filtro por query string com `Where`.
+2. `GET /itens?autor=machado` — busca parcial, sem diferenciar maiúsculas.
+3. Fazer o tipo do item aparecer no JSON (`"tipo": "livro"`). **Onde?** Projeção na API
+   (`item.GetType().Name`) ou propriedade no domínio — e por quê.
+4. `PUT /itens/{id}/classificacao` — o método `AlterarClassificacao` já existe no domínio e
+   nenhuma rota o chama.
 
 **Conceituais** (exigem decidir onde a regra mora)
-4. `PUT /pessoas/{id}` — o que pode mudar? `DataNascimento` pode? E se mudar a idade e ela já
+5. `PUT /pessoas/{id}` — o que pode mudar? `DataNascimento` pode? E se mudar a idade e ela já
    estiver com um DVD +16 emprestado?
-5. `DELETE /pessoas/{id}` — e se ela tiver empréstimo em aberto? (mesma discussão do DELETE de
+6. `DELETE /pessoas/{id}` — e se ela tiver empréstimo em aberto? (mesma discussão do DELETE de
    item, mas eles têm que chegar sozinhos)
-6. Idade máxima: hoje uma pessoa nasce em 01/01/0001 e nada reclama. **Onde a regra deve ficar?**
+7. Idade máxima: hoje uma pessoa nasce em 01/01/0001 e nada reclama. **Onde a regra deve ficar?**
    (resposta: construtor de `Pessoa`, não no record de requisição)
+8. `{"tipo":"livro","idadeMinima":18}` cria um livro livre, em silêncio — o campo é ignorado.
+   Deve recusar? Com qual status?
+9. Tipo inválido responde **409**. Há argumento para 400 (o cliente escreveu errado, não é o
+   estado que recusa). Qual está certo? Como implementar o 400 sem quebrar o middleware?
 
 **Difíceis** (mexem no domínio)
-7. `QtdDiasAtrasados` devolve `-14` para quem não está atrasado. Conserte — e justifique se a
-   correção é do domínio ou da projeção.
-8. Renovação de empréstimo: estende o prazo se não houver atraso. Onde esse método vive?
-9. Multa paga: como registrar sem quebrar o congelamento da multa na devolução?
+10. `QtdDiasAtrasados` devolve `-14` para quem não está atrasado. Conserte — e justifique se a
+    correção é do domínio ou da projeção.
+11. Renovação de empréstimo: estende o prazo se não houver atraso. Onde esse método vive?
+12. Multa paga: como registrar sem quebrar o congelamento da multa na devolução?
+13. `GET /emprestimos` usa `SelectMany` sobre todas as pessoas. Dê a empréstimo uma coleção
+    própria — e diga o que `Pessoa` perde com isso. (Pista: o limite de três.)
 
 ---
 
@@ -470,9 +591,11 @@ Baseado nos tropeços reais registrados no `DOC-2`.
 | `Use` depois dos `Map` | 500 em vez de 409 | "o que `next()` está chamando?" |
 | Verbo não registrado | 405 + `Allow: GET` | "o `Allow` está dizendo o quê?" |
 | Compilar com a API rodando | `MSB3027` | "quem está com o arquivo aberto?" |
-| Serializar `Pessoa` direto | 500 só quando há empréstimo | "quando exatamente começou a quebrar?" |
+| Serializar `Pessoa` direto | resposta com empréstimos aninhados | "isso é o que o endpoint promete?" |
 | `curl` sem `.exe` no PowerShell | sintaxe estranha, `-i` ignorado | `curl` é apelido de `Invoke-WebRequest` |
 | JSON malformado no POST | 400 do framework | faltou `--%` |
+| `TypeLoadException: Invalid_Token` | erro idêntico por mais que tente | **não é o código** — `dotnet clean` e apagar `bin`/`obj` |
+| Ids altos, item "errado" no teste | API não reiniciada entre rodadas | contadores `static` seguem de onde pararam |
 
 **Regra de ouro para a condução:** quando o erro aparecer, **não conserte**. Leia a mensagem em
 voz alta e pergunte o que ela está dizendo. Metade dos erros deste projeto se explica sozinha na
