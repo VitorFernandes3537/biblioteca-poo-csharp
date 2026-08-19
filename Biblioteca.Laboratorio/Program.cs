@@ -65,5 +65,5 @@ try
 }
 catch (ExcecaoDominio excecao)
 {
-    Console.WriteLine($"Cena 5 - {excecao.Message}");
+    Console.WriteLine($"Cena 6 - {excecao.Message}");
 }
