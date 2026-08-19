@@ -125,7 +125,7 @@ ipch/
 *.vsp
 *.vspx
 *.sap
-
+claude.md
 # Visual Studio Trace Files
 *.e2e
 

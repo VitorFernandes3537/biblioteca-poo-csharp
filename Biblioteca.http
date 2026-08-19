@@ -1,0 +1,77 @@
+# Biblioteca - requisicoes da API
+#
+# Ponha este arquivo em Biblioteca.Api/ e clique em "Send Request" acima de cada
+# bloco. Cada "###" separa uma requisicao.
+#
+# PRECISA da extensao REST Client (humao.rest-client) no VS Code.
+# O C# Dev Kit NAO executa .http - sem a extensao, isto aqui e so texto.
+#
+# Sem shell, sem aspas escapadas, sem --%. O corpo JSON vai escrito como JSON.
+
+@baseUrl = http://localhost:5249
+
+# Para chamar por tunel, comente a linha de cima e descomente a de baixo,
+# trocando pela URL que o cloudflared imprimiu:
+# @baseUrl = https://algo-aleatorio.trycloudflare.com
+
+
+# =============================================================================
+# ETAPA 0 - a solucao sobe
+# =============================================================================
+
+### O endpoint que veio no modelo. Esperado: 200 e o texto Hello World!
+# Some na Etapa 1, quando as rotas de verdade entram no lugar dele.
+GET {{baseUrl}}/
+
+
+# =============================================================================
+# ETAPA 1 - leitura do acervo
+# =============================================================================
+
+### A colecao inteira. Esperado: 200 e um array.
+# Acervo vazio sai como [] com 200 - a colecao existe, so esta vazia.
+# Se vier [] quando deveria ter itens: o new Acervo() foi parar dentro do endpoint.
+GET {{baseUrl}}/itens
+Accept: application/json
+
+### Um item pelo Id. Esperado: 200 e o objeto.
+# Confira que os Ids da listagem acima sao diferentes entre si.
+# Todos iguais = falta o static no contador.
+GET {{baseUrl}}/itens/1
+Accept: application/json
+
+### Id que nao existe. Esperado: 404 COM corpo { "erro": ... }
+# Quem respondeu foi o SEU codigo: a rota existe, o item e que nao.
+GET {{baseUrl}}/itens/999999
+Accept: application/json
+
+### Id que nao e numero. Esperado: 404 SEM corpo nenhum.
+# Quem respondeu foi o ROTEADOR, e o seu codigo nunca rodou:
+# "abc" nao passa na restricao {id:int}.
+#
+# Este par com o de cima e o mais importante do arquivo. Mesmo status,
+# coisas opostas. Se este vier com corpo, a restricao {id:int} sumiu.
+GET {{baseUrl}}/itens/abc
+Accept: application/json
+
+
+# =============================================================================
+# ETAPA 2 - a recusa do dominio vira resposta
+# =============================================================================
+
+### O andaime que prova o middleware. Esperado: 409 e { "erro": "O titulo e obrigatorio." }
+# 500 aqui = o app.Use foi registrado DEPOIS dos app.Map.
+# 404 sem corpo = a rota nao existe (ou ficou abaixo do app.Run()).
+#
+# Este endpoint sai na Etapa 3, quando o POST recusar titulo vazio pelo
+# caminho normal. Apague este bloco junto com ele.
+GET {{baseUrl}}/estouro-teste
+Accept: application/json
+
+
+# =============================================================================
+# ETAPA 3 em diante
+# =============================================================================
+# Os blocos de POST, PUT e DELETE entram junto com cada etapa. E ali que este
+# arquivo passa a valer mais que a linha de comando: corpo JSON escrito como
+# JSON, sem escape nenhum.
