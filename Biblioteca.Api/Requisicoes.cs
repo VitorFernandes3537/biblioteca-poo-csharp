@@ -34,3 +34,9 @@ public record AlteracaoItem(string? Titulo, string? Autor);
 // O dominio nao tem regra de idade maxima; se ela devesse existir, o lugar dela
 // e o construtor de Pessoa, nao este record.
 public record NovaPessoa(string? Nome, DateTime DataNascimento);
+
+// O mesmo corpo serve para emprestar e devolver: os dois identificam o par
+// pessoa + item. Um record so, e nao dois iguais com nomes diferentes.
+// ATENCAO: Ids e nao objetos. O cliente aponta para quem ja existe; a API
+// nunca cria pessoa ou item a partir do corpo de um emprestimo.
+public record MovimentacaoEmprestimo(int PessoaId, int ItemId);

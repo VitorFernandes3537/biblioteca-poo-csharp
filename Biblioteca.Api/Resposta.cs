@@ -32,3 +32,32 @@ public record PessoaResposta(
         pessoa.Idade,
         pessoa.QtdEmprestimosEmAberto);
 }
+
+// Emprestimo tem o mesmo ciclo de Pessoa — Emprestimo.Pessoa.Emprestimos —
+// entao vale a mesma solucao. Pessoa e Item entram como Id e nome/titulo, e nao
+// como objetos aninhados: a resposta diz QUEM e O QUE, sem arrastar o grafo inteiro.
+// Quem quiser a pessoa completa tem /pessoas/{id}, que ja existe.
+public record EmprestimoResposta(
+    int PessoaId,
+    string PessoaNome,
+    int ItemId,
+    string ItemTitulo,
+    DateTime DataEmprestimo,
+    DateTime PrazoLimite,
+    DateTime? DataDevolucao,
+    bool EstaEmAberto,
+    int QtdDiasAtrasados,
+    decimal MultaAtual)
+{
+    public static EmprestimoResposta De(Emprestimo emprestimo) => new(
+        emprestimo.Pessoa.Id,
+        emprestimo.Pessoa.Nome,
+        emprestimo.Item.Id,
+        emprestimo.Item.Titulo,
+        emprestimo.DataEmprestimo,
+        emprestimo.PrazoLimite,
+        emprestimo.DataDevolucao,
+        emprestimo.EstaEmAberto,
+        emprestimo.QtdDiasAtrasados,
+        emprestimo.MultaAtual);
+}

@@ -32,9 +32,6 @@ app.Use(async (context, next) =>
     }
 });
 
-acervo.Adicionar(new Livro("Dom Casmurro", "Machado de Assis"));
-acervo.Adicionar(new Revista("Superinteressante", "Editora Abril"));
-acervo.Adicionar(new Dvd("Cidade de Deus", "Fernando Meirelles", 16));
 
 // Devolve a colecao direto, sem Results.Ok(): quando o retorno nao e um IResult,
 // o ASP.NET serializa em JSON e responde 200 sozinho. Results.Ok(acervo.Itens)
@@ -154,14 +151,70 @@ app.MapPost("/pessoas", (NovaPessoa requisicao) =>
 });
 
 
+app.MapPost("/emprestimos", (MovimentacaoEmprestimo requisicao) =>
+{
+    var pessoa = cadastro.BuscarPorId(requisicao.PessoaId);
+    if (pessoa is null)
+    {
+        return Results.NotFound(new { erro = $"Pessoa {requisicao.PessoaId} não encontrada." });
+    }
 
-// Andaime da Etapa 6: sem POST /emprestimos ainda, este e o unico jeito de ter
-// um item indisponivel para o DELETE recusar. Sai na Etapa 8.
-var dvdEmprestado = new Dvd("O Auto da Compadecida", "Guel Arraes", 12);
-acervo.Adicionar(dvdEmprestado);
-var pessoaDeTeste = new Pessoa("Teste", DateTime.Today.AddYears(-30));
-pessoaDeTeste.Emprestar(dvdEmprestado);
-cadastro.Adicionar(pessoaDeTeste);
+    var item = acervo.BuscarPorId(requisicao.ItemId);
+    if (item is null)
+    {
+        return Results.NotFound(new { erro = $"Item {requisicao.ItemId} não encontrado." });
+    }
+
+    // ATENCAO: pessoa.Emprestar(item), NUNCA new Emprestimo(pessoa, item).
+    // O construtor compila, marca o item como emprestado e pula tudo: nao checa
+    // idade, nao checa o limite de tres, e o emprestimo nao entra na lista da
+    // pessoa — QtdEmprestimosEmAberto continua no valor antigo e o limite some.
+    // Nada disso lanca. A unica defesa e nao chamar o construtor daqui.
+    // As tres recusas (idade, limite, item ja emprestado) sobem como
+    // ExcecaoDominio e viram 409 no middleware, sem try/catch neste bloco.
+    var emprestimo = pessoa.Emprestar(item);
+
+    // DECISAO SUA: 201 sem Location. Location aponta para o GET do recurso criado,
+    // e nao existe GET /emprestimos/{id} — emprestimo nao tem Id proprio, ele se
+    // identifica pelo par pessoa+item. Location apontando para /pessoas/{id}
+    // seria mentira: aquela URL devolve a pessoa, nao este emprestimo.
+    return Results.Created(string.Empty, EmprestimoResposta.De(emprestimo));
+});
+
+app.MapPost("/devolucoes", (MovimentacaoEmprestimo requisicao) =>
+{
+    var pessoa = cadastro.BuscarPorId(requisicao.PessoaId);
+    if (pessoa is null)
+    {
+        return Results.NotFound(new { erro = $"Pessoa {requisicao.PessoaId} não encontrada." });
+    }
+
+    // A assimetria da etapa: emprestar e da Pessoa, devolver e do Emprestimo.
+    // Entao aqui a API precisa ACHAR o emprestimo — o par (pessoa, item) em aberto.
+    // EstaEmAberto no filtro nao e detalhe: sem ele, um item emprestado, devolvido
+    // e emprestado de novo casaria com o registro antigo, ja fechado, e a
+    // devolucao nova estouraria "ja foi devolvido" apontando para o emprestimo errado.
+    var emprestimo = pessoa.Emprestimos.FirstOrDefault(
+        e => e.Item.Id == requisicao.ItemId && e.EstaEmAberto);
+
+    if (emprestimo is null)
+    {
+        // 404 e nao 409: nao ha emprestimo em aberto desse par para devolver —
+        // o recurso que a requisicao aponta nao existe. 409 seria o caso em que
+        // ele existe e o dominio recusa a operacao.
+        return Results.NotFound(new
+        {
+            erro = $"{pessoa.Nome} não está com o item {requisicao.ItemId} emprestado."
+        });
+    }
+
+    emprestimo.RegistrarDevolucao();
+
+    // 200 e nao 201: a devolucao nao criou recurso nenhum, alterou um existente.
+    // E devolver o corpo importa aqui — e nele que sai a multa apurada.
+    return Results.Ok(EmprestimoResposta.De(emprestimo));
+});
+
 
 
 
