@@ -4,7 +4,6 @@ using Biblioteca.Dominio;
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 var acervo = new Acervo();
-// Junto do var acervo = new Acervo();
 var cadastro = new Cadastro();
 
 
@@ -216,8 +215,4 @@ app.MapPost("/devolucoes", (MovimentacaoEmprestimo requisicao) =>
 });
 
 
-
-
-// Temporario, so para provar o middleware. Sai quando o POST /itens entrar.
-app.MapGet("/estouro-teste", () => new Livro("", "Ninguem"));
 app.Run();
