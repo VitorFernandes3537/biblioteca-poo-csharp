@@ -146,6 +146,51 @@ app.MapPost("/pessoas", (NovaPessoa requisicao) =>
 });
 
 
+app.MapGet("/pessoas/{id:int}/emprestimos", (int id) =>
+{
+    var pessoa = cadastro.BuscarPorId(id);
+    if (pessoa is null)
+    {
+        // 404 da PESSOA, e nao lista vazia: /pessoas/99/emprestimos com pessoa
+        // inexistente nao e "essa pessoa nao tem emprestimos" — e "essa pessoa
+        // nao existe". Devolver [] responderia a pergunta errada.
+        return Results.NotFound(new { erro = $"Pessoa {id} não encontrada." });
+    }
+
+    // Aqui lista vazia E a resposta certa: a pessoa existe e nunca pegou nada.
+    return Results.Ok(pessoa.Emprestimos.Select(
+        emprestimo => EmprestimoResposta.De(emprestimo, pessoa)));
+});
+
+app.MapGet("/emprestimos", (bool? emAberto) =>
+{
+    // SelectMany achata: para cada pessoa, pega a lista dela, e junta tudo numa so.
+    // Guardar a pessoa junto (o objeto anonimo) porque EmprestimoResposta.De precisa
+    // dela — o emprestimo tem so o PessoaId depois que quebramos o ciclo.
+    //
+    // ATENCAO: esta e a evidencia de que emprestimo NAO e uma colecao de primeira
+    // classe neste desenho. Item e Pessoa tem Acervo e Cadastro; emprestimo e
+    // residuo do agregado. Se um dia houver consulta pesada por emprestimo — por
+    // periodo, por atraso, por multa em aberto — este SelectMany vira o gargalo,
+    // e a saida seria dar a ele colecao propria.
+    var emprestimos = cadastro.Pessoas
+        .SelectMany(pessoa => pessoa.Emprestimos.Select(
+            emprestimo => new { emprestimo, pessoa }));
+
+    // Filtro opcional: sem o parametro, sai o historico inteiro. ?emAberto=true traz
+    // so os pendentes; ?emAberto=false, so os ja devolvidos.
+    // bool? e nao bool: com bool nao-anulavel, omitir o parametro daria false, e a
+    // rota sem filtro devolveria so os devolvidos — o oposto de "sem filtro".
+    if (emAberto is not null)
+    {
+        emprestimos = emprestimos.Where(par => par.emprestimo.EstaEmAberto == emAberto);
+    }
+
+    return emprestimos.Select(par => EmprestimoResposta.De(par.emprestimo, par.pessoa));
+});
+
+
+
 app.MapPost("/emprestimos", (MovimentacaoEmprestimo requisicao) =>
 {
     var pessoa = cadastro.BuscarPorId(requisicao.PessoaId);
