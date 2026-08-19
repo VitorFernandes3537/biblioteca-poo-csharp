@@ -3,6 +3,13 @@ namespace Biblioteca.Dominio;
 public class Pessoa
 {
     public const int LimiteEmprestimosEmAberto = 3;
+    // Contador proprio, separado do de ItemAcervo. Pessoa 1 e Item 1 coexistem
+    // sem conflito: o que identifica o recurso e a rota (/pessoas/1, /itens/1),
+    // nao o numero solto. Um contador unico compartilhado daria Ids "unicos no
+    // sistema" — garantia que ninguem pediu, ao custo de numeros esburacados
+    // em cada listagem.
+    private static int _proximoId = 1;
+    public int Id { get; private set; }
     private readonly List<Emprestimo> _emprestimos = [];
     public IReadOnlyList<Emprestimo> Emprestimos => _emprestimos;
 
@@ -16,6 +23,7 @@ public class Pessoa
         {
             throw new ExcecaoDominio("A data de nascimento não pode ser no futuro.");
         }
+        Id = _proximoId++;
         Nome = nome;
         DataNascimento = dataNascimento;
     }

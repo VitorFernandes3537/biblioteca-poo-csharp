@@ -4,6 +4,9 @@ using Biblioteca.Dominio;
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
 var acervo = new Acervo();
+// Junto do var acervo = new Acervo();
+var cadastro = new Cadastro();
+
 
 // ATENCAO: esta linha PRECISA vir antes de qualquer app.Map... — o middleware
 // so enxerga o que roda dentro do await next(), e next() e tudo que foi
@@ -28,9 +31,6 @@ app.Use(async (context, next) =>
         await context.Response.WriteAsJsonAsync(new { erro = excecao.Message });
     }
 });
-
-
-
 
 acervo.Adicionar(new Livro("Dom Casmurro", "Machado de Assis"));
 acervo.Adicionar(new Revista("Superinteressante", "Editora Abril"));
@@ -132,11 +132,37 @@ app.MapDelete("/itens/{id:int}", (int id) =>
     return Results.NoContent();
 });
 
+app.MapGet("/pessoas", () => cadastro.Pessoas.Select(PessoaResposta.De));
+
+app.MapGet("/pessoas/{id:int}", (int id) =>
+{
+    var pessoa = cadastro.BuscarPorId(id);
+    return pessoa is null
+        ? Results.NotFound(new { erro = $"Pessoa {id} não encontrada." })
+        // ATENCAO: PessoaResposta.De(pessoa), nunca pessoa. Passar o objeto do
+        // dominio aqui compila, sobe, e so estoura em 500 quando essa pessoa
+        // tiver o primeiro emprestimo. Ate la, parece funcionar.
+        : Results.Ok(PessoaResposta.De(pessoa));
+});
+
+app.MapPost("/pessoas", (NovaPessoa requisicao) =>
+{
+    // Nome vazio e data futura sobem como ExcecaoDominio e viram 409 no middleware.
+    var pessoa = new Pessoa(requisicao.Nome!, requisicao.DataNascimento);
+    cadastro.Adicionar(pessoa);
+    return Results.Created($"/pessoas/{pessoa.Id}", PessoaResposta.De(pessoa));
+});
+
+
+
 // Andaime da Etapa 6: sem POST /emprestimos ainda, este e o unico jeito de ter
 // um item indisponivel para o DELETE recusar. Sai na Etapa 8.
 var dvdEmprestado = new Dvd("O Auto da Compadecida", "Guel Arraes", 12);
 acervo.Adicionar(dvdEmprestado);
-new Pessoa("Teste", DateTime.Today.AddYears(-30)).Emprestar(dvdEmprestado);
+var pessoaDeTeste = new Pessoa("Teste", DateTime.Today.AddYears(-30));
+pessoaDeTeste.Emprestar(dvdEmprestado);
+cadastro.Adicionar(pessoaDeTeste);
+
 
 
 // Temporario, so para provar o middleware. Sai quando o POST /itens entrar.

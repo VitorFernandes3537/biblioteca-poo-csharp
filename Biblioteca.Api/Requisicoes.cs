@@ -28,3 +28,9 @@ public record NovoDvd(string? Titulo, string? Autor, int IdadeMinima);
 // nao o que cada filha acrescenta. Nao ha AlteracaoDvd porque IdadeMinima
 // nao entra nesta etapa.
 public record AlteracaoItem(string? Titulo, string? Autor);
+
+// DateTime e nao DateTime?: data ausente chega como 01/01/0001, que o construtor
+// aceita — nao e futura. ATENCAO: uma pessoa nasce com ~2025 anos e nada reclama.
+// O dominio nao tem regra de idade maxima; se ela devesse existir, o lugar dela
+// e o construtor de Pessoa, nao este record.
+public record NovaPessoa(string? Nome, DateTime DataNascimento);
