@@ -2,12 +2,16 @@ namespace Biblioteca.Dominio;
 
 public abstract class ItemAcervo
 {
-    protected ItemAcervo(string titulo, string autor)
+    private static int _proximoId = 1;
+    public int Id { get; private set; }
+    protected ItemAcervo(string titulo, string autor, int idadeMinima = 0)
     {
         if (string.IsNullOrWhiteSpace(titulo))
         {
             throw new ExcecaoDominio("O titulo é obrigatório.");
         }
+        Id = _proximoId++;
+        IdadeMinima = idadeMinima;
         Titulo = titulo;
         Autor = autor;
     }
@@ -16,7 +20,7 @@ public abstract class ItemAcervo
     public bool Disponibilidade { get; private set; } = true;
     public abstract int PrazoDevolucao { get; }
     public abstract decimal MultaDiaAtrasado { get; }
-    public virtual int IdadeMinima => 0;
+    public int IdadeMinima { get; private set; }
     public bool PermiteIdade(int idade)
     {
         return idade >= IdadeMinima;
