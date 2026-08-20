@@ -8,6 +8,19 @@ var app = builder.Build();
 var acervo = new Acervo();
 AcervoSeed.Popular(acervo);
 
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next();
+    }
+    catch (ExcecaoDominio ex)
+    {
+        context.Response.StatusCode = StatusCodes.Status409Conflict;
+        await context.Response.WriteAsJsonAsync(new { erro = ex.Message });
+    }
+});
+
 app.MapGet("/", () => Results.Redirect("/itens"));
 
 app.MapGet("/itens", () => acervo.Itens);
@@ -22,4 +35,7 @@ app.MapGet("/itens/{id:int}", (int id) =>
     return Results.Ok(itemEncontrado);
 });
 
+
+
+app.MapGet("/estouro-teste", () => new Livro("", "Ninguem"));
 app.Run();
