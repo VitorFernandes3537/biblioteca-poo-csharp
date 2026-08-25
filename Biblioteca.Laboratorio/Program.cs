@@ -73,3 +73,8 @@ var livroNovo = new Livro("O Cortiço", "Aluísio Azevedo");
 var revistaNova = new Livro("Piauí", "Alvinegra");
 Console.WriteLine($"Cena 6 - {livroNovo.Titulo} e o Id {livroNovo.Id}, " +
                   $"{revistaNova.Titulo} e o Id {revistaNova.Id}");
+
+var pessoaNova = new Pessoa("Zenaide", new DateTime(1968, 4, 2));
+var outraPessoa = new Pessoa("Elias", new DateTime(1955, 9, 17));
+Console.WriteLine($"Cena 7 - {pessoaNova.Nome} e o Id {pessoaNova.Id}, " +
+                  $"{outraPessoa.Nome} e o Id {outraPessoa.Id}");

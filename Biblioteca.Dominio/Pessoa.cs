@@ -2,6 +2,8 @@ namespace Biblioteca.Dominio;
 
 public class Pessoa
 {
+    private static int _proximoId = 1;
+    public int Id { get; }
     public const int LimiteEmprestimosEmAberto = 3;
     private readonly List<Emprestimo> _emprestimos = [];
     public IReadOnlyList<Emprestimo> Emprestimos => _emprestimos;
@@ -18,6 +20,7 @@ public class Pessoa
         }
         Nome = nome;
         DataNascimento = dataNascimento;
+        Id = _proximoId++;
     }
 
     public string Nome { get; private set; }
