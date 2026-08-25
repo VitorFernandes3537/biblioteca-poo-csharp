@@ -1,5 +1,4 @@
 using Biblioteca.Dominio;
-
 namespace Biblioteca.Api;
 
 public static class Seed

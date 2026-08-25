@@ -68,7 +68,6 @@ catch (ExcecaoDominio excecao)
     Console.WriteLine($"Cena 5 - {excecao.Message}");
 }
 
-
 var livroNovo = new Livro("O Cortiço", "Aluísio Azevedo");
 var revistaNova = new Livro("Piauí", "Alvinegra");
 Console.WriteLine($"Cena 6 - {livroNovo.Titulo} e o Id {livroNovo.Id}, " +
