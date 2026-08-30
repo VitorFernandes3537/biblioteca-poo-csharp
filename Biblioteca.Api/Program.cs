@@ -1,4 +1,5 @@
 using Biblioteca.Api;
+using Biblioteca.Dominio;
 
 var builder = WebApplication.CreateBuilder(args);
 var app = builder.Build();
@@ -6,6 +7,19 @@ var app = builder.Build();
 var cadastro = new Cadastro();
 var acervo = new Acervo();
 Seed.Popular(acervo, cadastro);
+
+app.Use(async (context, next) =>
+{
+    try
+    {
+        await next(context);
+    }
+    catch (ExcecaoDominio excecao)
+    {
+        context.Response.StatusCode = StatusCodes.Status409Conflict;
+        await context.Response.WriteAsJsonAsync(new { erro = excecao.Message });
+    }
+});
 
 app.MapGet("/", () => Results.Redirect("/itens"));
 
@@ -15,9 +29,9 @@ app.MapGet("/itens/{id:int}", (int id) =>
 {
     var item = acervo.BuscarPorId(id);
 
-    if(item is null)
+    if (item is null)
     {
-        return Results.NotFound(new { erro = $"O {id} do Item não foi encontrado!"});
+        return Results.NotFound(new { erro = $"O {id} do Item não foi encontrado!" });
     }
 
     return Results.Ok(item);
