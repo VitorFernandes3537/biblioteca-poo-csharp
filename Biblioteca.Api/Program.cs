@@ -35,4 +35,30 @@ app.MapGet("/pessoas", () => cadastro.Pessoa.Select(pessoa => new
     EmprestimoEmAberto = pessoa.QtdEmprestimosEmAberto
 }));
 
+app.MapPost("/emprestimos", (NovoEmprestimo dados) =>
+{
+    var pessoa = cadastro.BuscarPorId(dados.PessoaId);
+
+    if (pessoa is null)
+    {
+        return Results.NotFound(new { erro = $"Pessoa {dados.PessoaId} não encontrada." });
+    }
+
+    var item = acervo.BuscarPorId(dados.ItemId);
+
+    if (item is null)
+    {
+        return Results.NotFound(new { erro = $"Item {dados.ItemId} não encontrado." });
+    }
+
+    var emprestimo = pessoa.Emprestar(item);
+
+    return Results.Ok(new
+    {
+        pessoa = pessoa.Nome,
+        item = item.Titulo,
+        prazo = emprestimo.PrazoLimite
+    });
+});
+
 app.Run();
