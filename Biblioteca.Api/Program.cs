@@ -23,7 +23,15 @@ app.Use(async (context, next) =>
 
 app.MapGet("/", () => Results.Redirect("/itens"));
 
-app.MapGet("/itens", () => acervo.Itens);
+app.MapGet("/itens", () =>
+{
+    List<DtoItem> listaDto = [];
+    foreach (var item in acervo.Itens)
+    {
+        listaDto.Add(DtoItem.DoAcervo(item));
+    }
+    return Results.Ok(listaDto);
+});
 
 app.MapGet("/itens/{id:int}", (int id) =>
 {
@@ -34,7 +42,7 @@ app.MapGet("/itens/{id:int}", (int id) =>
         return Results.NotFound(new { erro = $"O {id} do Item não foi encontrado!" });
     }
 
-    return Results.Ok(item);
+    return Results.Ok(DtoItem.DoAcervo(item));
 
     // return item is null
     // ? Results.NotFound(new { erro = $"O {id} do Item não foi encontrado!"})
@@ -48,6 +56,31 @@ app.MapGet("/pessoas", () => cadastro.Pessoa.Select(pessoa => new
     pessoa.Nome,
     EmprestimoEmAberto = pessoa.QtdEmprestimosEmAberto
 }));
+
+// Endpoints de criação de cada tipo de item. 
+app.MapPost("/itens/livro", (NovoLivro dados) =>
+{
+    var livro = new Livro(dados.Titulo, dados.Autor);
+    acervo.Adicionar(livro);
+    
+    return Results.Created($"/itens/{livro.Id}", DtoItem.DoAcervo(livro));
+});
+
+app.MapPost("/itens/revista", (NovoRevista dados) =>
+{
+    var revista = new Revista(dados.Titulo, dados.Autor);
+    acervo.Adicionar(revista);
+    
+    return Results.Created($"/itens/{revista.Id}", DtoItem.DoAcervo(revista));
+});
+
+app.MapPost("/itens/dvd", (NovoDvd dados) =>
+{
+    var dvd = new Dvd(dados.Titulo, dados.Autor, dados.IdadeMinima);
+    acervo.Adicionar(dvd);
+    
+    return Results.Created($"/itens/{dvd.Id}", DtoItem.DoAcervo(dvd));
+});
 
 app.MapPost("/emprestimos", (NovoEmprestimo dados) =>
 {
